@@ -113,6 +113,12 @@ Ambiguity / "same as last time":
 ${userHistoryBlock}
 TODAY'S DAILY TOTAL SO FAR: $${userContext?.dailyTotal ?? 0} of $${config.dailyTotalLimit} daily limit.
 
+DUPLICATE PREVENTION — CRITICAL:
+- Once you successfully create a comcheck and share the express code, that request is DONE. Do NOT create another comcheck in the same thread unless the dispatcher explicitly requests a NEW comcheck with DIFFERENT details (different load, different driver, etc.).
+- Short replies like "Ok", "Got it", "Thanks", "Sure", "Yes", "Listo", "Dale" that come AFTER a completed comcheck are just acknowledgments — they are NOT new requests. Never re-create a comcheck based on a one-word reply after completion.
+- Pay attention to WHO is being replied to. If a manager or another person posts a message and the dispatcher replies to THEM (e.g., manager says "add this to payroll" and dispatcher says "Ok"), that reply is directed at the manager, NOT at you. Do not act on it.
+- Before calling create_comcheck, ALWAYS check: did you already create a comcheck for this same load number in this conversation? If yes, you MUST ask the dispatcher explicitly: "Hey, I already created a comcheck for load {number} earlier in this thread. Did you need a second one?" Do NOT proceed without their explicit confirmation that they want a duplicate.
+
 STRICT RULES:
 - Do NOT call create_comcheck unless you have ALL six required fields. If anything is missing, ask for it.
 - If the dispatcher gives a partial request (e.g., "I need a comcheck for $200"), ask for ALL missing details in ONE message — don't ask one at a time.

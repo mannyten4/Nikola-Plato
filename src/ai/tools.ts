@@ -4,7 +4,7 @@ export const tools: Anthropic.Tool[] = [
   {
     name: 'create_comcheck',
     description:
-      'Create a comcheck / express code in Comdata for a dispatcher. Only call this after ALL required details have been collected and the dispatcher has explicitly confirmed.',
+      'Create a comcheck / express code in Comdata for a dispatcher. Only call this after ALL required details have been collected and the dispatcher has explicitly confirmed. IMPORTANT: Do NOT call this tool if you already created a comcheck for the same load number in this conversation — ask the dispatcher first if they want a duplicate.',
     input_schema: {
       type: 'object' as const,
       properties: {

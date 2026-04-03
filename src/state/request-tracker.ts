@@ -239,6 +239,19 @@ export class RequestTracker {
     };
   }
 
+  /** Find a recently completed comcheck with the same load/reference number */
+  findRecentByLoadNumber(referenceNumber: string, withinHours = 24): ComcheckRequest | undefined {
+    return this.db
+      .prepare(
+        `SELECT * FROM comcheck_requests
+         WHERE reference_number = ?
+           AND status = 'completed'
+           AND created_at >= datetime('now', '-' || ? || ' hours')
+         ORDER BY created_at DESC LIMIT 1`
+      )
+      .get(referenceNumber, withinHours) as ComcheckRequest | undefined;
+  }
+
   /** Cleanup stuck/stale requests */
   cleanup(): void {
     // Requests stuck in 'processing' for more than 10 minutes → failed

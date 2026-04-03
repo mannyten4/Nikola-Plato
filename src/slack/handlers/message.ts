@@ -97,6 +97,22 @@ export function registerMessageHandler(app: App, agent: AgentBrain, tracker: Req
           return;
         }
 
+        // Duplicate guard: check if a comcheck for this load was already created recently
+        if (input.reference_number) {
+          const duplicate = tracker.findRecentByLoadNumber(input.reference_number);
+          if (duplicate) {
+            const timeAgo = duplicate.completed_at
+              ? `at ${duplicate.completed_at}`
+              : 'recently';
+            logger.warn(`Duplicate blocked: load ${input.reference_number} already has comcheck ${duplicate.express_code}`);
+            await say({
+              text: `Heads up — a comcheck for load ${input.reference_number} was already created ${timeAgo} (express code: \`${duplicate.express_code}\`, $${duplicate.amount} for ${duplicate.payee_name}). Did you need a second one for the same load? Let me know and I'll create it.`,
+              thread_ts: threadTs,
+            });
+            return;
+          }
+        }
+
         // Create or update request record
         let request = existing;
         if (!request) {
