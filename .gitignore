@@ -1,0 +1,10 @@
+node_modules/
+dist/
+browser-data/
+screenshots/
+discovery/
+data/
+logs/
+.env
+*.log
+cookies-backup.json

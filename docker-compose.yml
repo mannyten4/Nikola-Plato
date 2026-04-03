@@ -1,0 +1,25 @@
+services:
+  browser-ai:
+    build: .
+    container_name: browser-ai
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - BROWSER_HEADLESS=true
+      - NODE_ENV=production
+    volumes:
+      - ./browser-data:/app/browser-data
+      - ./screenshots:/app/screenshots
+      - ./logs:/app/logs
+      - ./data:/app/data
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2"
+    healthcheck:
+      test: ["CMD", "node", "-e", "try { require('better-sqlite3')('./data/browser-ai.db').prepare('SELECT 1').get(); process.exit(0); } catch { process.exit(1); }"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

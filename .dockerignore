@@ -1,0 +1,13 @@
+node_modules
+dist
+.env
+browser-data
+screenshots
+logs
+data
+*.log
+.git
+.gitignore
+CLAUDE.md
+browser-ai-build-guide.md
+discovery
