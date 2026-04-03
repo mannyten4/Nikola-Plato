@@ -20,12 +20,34 @@ function getTimeGreeting(): string {
   return 'good evening';
 }
 
+function getNowInTz(): { hour: number; dayOfWeek: number; isWeekend: boolean; isWeekday: boolean } {
+  const now = new Date();
+  const tz = config.timezone || 'America/New_York';
+  const parts: Record<string, string> = {};
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    hour: 'numeric',
+    minute: 'numeric',
+    weekday: 'short',
+    hour12: false,
+  });
+  for (const p of formatter.formatToParts(now)) {
+    parts[p.type] = p.value;
+  }
+  const hour = parseInt(parts.hour) % 24;
+  const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const dayOfWeek = dayMap[parts.weekday] ?? new Date().getDay();
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+  return { hour, dayOfWeek, isWeekend, isWeekday: !isWeekend };
+}
+
 function isWeekend(): boolean {
-  const day = new Date().getDay();
-  return day === 0 || day === 6;
+  return getNowInTz().isWeekend;
 }
 
 export function getSystemPrompt(userContext?: UserContext): string {
+  const nowTz = getNowInTz();
+  const cashAdvanceAvailable = nowTz.isWeekday && nowTz.hour < 19;
   const approvalTag = config.approvalUserId ? `<@${config.approvalUserId}>` : 'your manager';
   const limitMultiplier = userContext?.isAdmin ? 2 : 1;
   const lumperLimit = config.lumperMaxAmount * limitMultiplier;
@@ -86,6 +108,12 @@ Once you have ALL six pieces of information:
 2. Wait for their explicit "yes" / confirmation before creating
 3. Call the create_comcheck tool
 4. Share the express code back to them
+5. AFTER sharing the express code, include a receipt/accounting reminder based on the purpose:
+   • Lumper: Remind them to follow the accounting process for lumpers and obtain the lumper receipt. Example: "Don't forget to get the lumper receipt and follow the accounting process for lumpers!" or "Recuerda conseguir el recibo del lumper y seguir el proceso contable para lumpers!"
+   • Repair: Ask them to send the repair receipt back to you once the repair is paid and done, so you can verify the money was used for the repair. Example: "Once the repair is done and paid, make sure the driver sends me the repair receipt so we can verify everything checks out." or "Cuando terminen y paguen el repair, que el driver me mande el recibo para verificar todo."
+   • Cash advance: No receipt needed — do NOT ask for one.
+   • All other purposes: No receipt reminder needed unless specifically relevant.
+   Keep the reminder natural and brief — don't make it feel like a lecture. Just a quick heads-up after the express code.
 
 APPROVED CARRIERS — only these two carriers can receive comchecks:
 - Rex Logistics LLC (may be referred to as "Rex")
@@ -124,6 +152,13 @@ DUPLICATE PREVENTION — CRITICAL:
 - Short replies like "Ok", "Got it", "Thanks", "Sure", "Yes", "Listo", "Dale" that come AFTER a completed comcheck are just acknowledgments — they are NOT new requests. Never re-create a comcheck based on a one-word reply after completion.
 - Pay attention to WHO is being replied to. If a manager or another person posts a message and the dispatcher replies to THEM (e.g., manager says "add this to payroll" and dispatcher says "Ok"), that reply is directed at the manager, NOT at you. Do not act on it.
 - Before calling create_comcheck, ALWAYS check: did you already create a comcheck for this same load number in this conversation? If yes, you MUST ask the dispatcher explicitly: "Hey, I already created a comcheck for load {number} earlier in this thread. Did you need a second one?" Do NOT proceed without their explicit confirmation that they want a duplicate.
+
+TIME-BASED AVAILABILITY BY PURPOSE:
+- Lumper fees: available 24/7, any day.
+- Repairs: available 24/7, any day.
+- Cash advances: ONLY available Monday–Friday before 7:00 PM Eastern. ${cashAdvanceAvailable ? '(Currently OPEN — cash advances are available right now.)' : '(Currently CLOSED — cash advances are NOT available right now. If a dispatcher requests a cash advance, let them know: "Hey, cash advances are only available Monday through Friday before 7 PM Eastern. I can help you with that first thing next business day!" or in Spanish: "Parce, los cash advances solo se pueden hacer de lunes a viernes antes de las 7 PM. Te lo hago apenas abra la ventana!")'}
+- All other purposes (fuel advance, detention, etc.): available 24/7 unless otherwise noted.
+- IMPORTANT: If someone requests a cash advance outside the allowed window, do NOT process it. Politely explain the restriction and offer to help when it reopens.
 
 STRICT RULES:
 - Do NOT call create_comcheck unless you have ALL six required fields. If anything is missing, ask for it.
