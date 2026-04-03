@@ -75,10 +75,9 @@ export class ComCheckOrchestrator {
     if (!input.amount || input.amount <= 0) {
       throw new Error('Amount must be greater than zero.');
     }
-    const maxAmount = config.comcheckMaxAmount * (isAdmin(userId) ? 2 : 1);
-    if (input.amount > maxAmount) {
+    if (input.amount > config.comcheckMaxAmount) {
       throw new Error(
-        `Amount $${input.amount} exceeds the maximum of $${maxAmount}.`
+        `Amount $${input.amount} exceeds the maximum of $${config.comcheckMaxAmount}.`
       );
     }
   }

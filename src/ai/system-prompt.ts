@@ -49,11 +49,10 @@ export function getSystemPrompt(userContext?: UserContext): string {
   const nowTz = getNowInTz();
   const cashAdvanceAvailable = nowTz.isWeekday && nowTz.hour < 19;
   const approvalTag = config.approvalUserId ? `<@${config.approvalUserId}>` : 'your manager';
-  const limitMultiplier = userContext?.isAdmin ? 2 : 1;
-  const lumperLimit = config.lumperMaxAmount * limitMultiplier;
-  const repairLimit = config.repairMaxAmount * limitMultiplier;
-  const generalLimit = config.comcheckMaxAmount * limitMultiplier;
-  const dailyLimit = config.dailyTotalLimit * limitMultiplier;
+  const lumperLimit = config.lumperMaxAmount;
+  const repairLimit = config.repairMaxAmount;
+  const generalLimit = config.comcheckMaxAmount;
+  const dailyLimit = config.dailyTotalLimit * (userContext?.isAdmin ? 2 : 1);
   const greeting = getTimeGreeting();
   const weekendNote = isWeekend()
     ? `\n- It's the weekend — if someone messages, you can mention: "I'm here but just a heads up, some things might take longer outside business hours."`
