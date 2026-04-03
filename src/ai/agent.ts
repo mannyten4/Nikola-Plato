@@ -4,6 +4,7 @@ import { getSystemPrompt } from './system-prompt';
 import { tools, CreateComcheckInput } from './tools';
 import { ConversationManager } from './conversation';
 import { RequestTracker } from '../state/request-tracker';
+import { isAdmin } from '../security/access-control';
 
 export interface AgentResponse {
   text: string;
@@ -46,7 +47,7 @@ export class AgentBrain {
     let userContext: Parameters<typeof getSystemPrompt>[0];
     if (this.tracker) {
       const dailyTotal = this.tracker.getDailyTotal();
-      userContext = { dailyTotal };
+      userContext = { dailyTotal, isAdmin: userId ? isAdmin(userId) : false };
 
       if (userId) {
         const recent = this.tracker.getRequestsByUser(userId, 5);

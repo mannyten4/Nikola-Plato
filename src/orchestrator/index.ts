@@ -4,6 +4,7 @@ import { RequestTracker } from '../state/request-tracker';
 import { CreateComcheckInput } from '../ai/tools';
 import { ComCheckRequest, ComCheckResult } from '../types';
 import { config } from '../config';
+import { isAdmin } from '../security/access-control';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('orchestrator');
@@ -16,6 +17,7 @@ interface QueueItem {
   requestId: string;
   input: CreateComcheckInput;
   threadTs: string;
+  userId: string;
   resolve: (result: ComCheckResult) => void;
   reject: (error: Error) => void;
   enqueuedAt: number;
@@ -33,10 +35,11 @@ export class ComCheckOrchestrator {
   async executeComCheck(
     requestId: string,
     input: CreateComcheckInput,
-    threadTs: string
+    threadTs: string,
+    userId = ''
   ): Promise<ComCheckResult> {
     // Validate input
-    this.validate(input);
+    this.validate(input, userId);
 
     // Check queue capacity
     if (this.queue.length >= MAX_QUEUE_SIZE) {
@@ -50,6 +53,7 @@ export class ComCheckOrchestrator {
         requestId,
         input,
         threadTs,
+        userId,
         resolve,
         reject,
         enqueuedAt: Date.now(),
@@ -64,16 +68,17 @@ export class ComCheckOrchestrator {
     return { queueLength: this.queue.length, isProcessing: this.processing };
   }
 
-  private validate(input: CreateComcheckInput): void {
+  private validate(input: CreateComcheckInput, userId: string): void {
     if (!input.payee_name || input.payee_name.trim().length === 0) {
       throw new Error('Payee name is required.');
     }
     if (!input.amount || input.amount <= 0) {
       throw new Error('Amount must be greater than zero.');
     }
-    if (input.amount > config.comcheckMaxAmount) {
+    const maxAmount = config.comcheckMaxAmount * (isAdmin(userId) ? 2 : 1);
+    if (input.amount > maxAmount) {
       throw new Error(
-        `Amount $${input.amount} exceeds the maximum of $${config.comcheckMaxAmount}.`
+        `Amount $${input.amount} exceeds the maximum of $${maxAmount}.`
       );
     }
   }

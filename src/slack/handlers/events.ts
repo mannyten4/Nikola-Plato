@@ -1,7 +1,9 @@
 import { App } from '@slack/bolt';
 import { isAllowedChannel } from '../middleware/auth';
+import { isAdmin } from '../../security/access-control';
 import { AgentBrain } from '../../ai/agent';
 import { RequestTracker } from '../../state/request-tracker';
+import { sendOnDemandReport } from '../../reporting/daily-reports';
 
 export function registerEventHandlers(app: App, agent: AgentBrain, tracker: RequestTracker): void {
   app.event('app_mention', async ({ event, client, say }) => {
@@ -27,6 +29,12 @@ export function registerEventHandlers(app: App, agent: AgentBrain, tracker: Requ
       // Strip the @mention from the text
       const text = (event.text || '').replace(/<@[A-Z0-9]+>/g, '').trim();
       if (!text) return;
+
+      // Admin manual report trigger: "@Nikola report"
+      if (/^report$/i.test(text) && isAdmin(userId)) {
+        await sendOnDemandReport(client, tracker, event.channel, threadTs);
+        return;
+      }
 
       console.log(`[slack] Mention from ${userName || userId}: ${text}`);
       const response = await agent.processMessage(threadTs, text, userName);

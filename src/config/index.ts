@@ -40,8 +40,11 @@ export const config = {
   dailyTotalLimit: parseInt(process.env.DAILY_TOTAL_LIMIT || '2500', 10),
   mockBrowser: process.env.MOCK_BROWSER === 'true',
   logChannelId: optionalEnv('LOG_CHANNEL_ID'),
-  adminUserIds: (process.env.ADMIN_USER_IDS || '').split(',').filter(Boolean),
+  allowedUserIds: (process.env.ALLOWED_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean),
+  adminUserIds: (process.env.ADMIN_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean),
   approvalUserId: process.env.APPROVAL_USER_ID || '',
   adminSlackUserId: optionalEnv('ADMIN_SLACK_USER_ID') || '',
   reportUserIds: (process.env.REPORT_USER_IDS || '').split(',').filter(Boolean),
+  timezone: process.env.TIMEZONE || 'America/New_York',
+  reportChannelId: process.env.REPORT_CHANNEL_ID || process.env.LOG_CHANNEL_ID || '',
 } as const;

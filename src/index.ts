@@ -9,6 +9,7 @@ import { ComdataAutomation } from './browser/comdata-automation';
 import { ComCheckOrchestrator } from './orchestrator';
 import { HealthMonitor } from './monitoring/health';
 import { scheduleDailyReport } from './monitoring/daily-report';
+import { startReportScheduler, stopReportScheduler } from './reporting/daily-reports';
 import { Watchdog } from './process/watchdog';
 import { createLogger } from './utils/logger';
 
@@ -77,9 +78,12 @@ async function main() {
     watchdog.start();
     logger.info('Watchdog started.');
 
-    // Schedule daily report at 9 AM
+    // Schedule daily report at 9 AM (legacy)
     dailyReportTimeout = scheduleDailyReport(slackApp.client, requestTracker);
     logger.info('Daily report scheduler initialized.');
+
+    // Schedule business hours (5 PM) and overnight (9 AM) reports
+    startReportScheduler(slackApp.client, requestTracker);
 
     // Health check every 60 seconds
     healthCheckInterval = setInterval(async () => {
@@ -130,6 +134,8 @@ async function shutdown(exitCode = 0) {
   if (healthMonitor) {
     healthMonitor.stop();
   }
+
+  stopReportScheduler();
 
   // Wait for in-progress comcheck to finish (up to 60 seconds)
   if (orchestrator) {

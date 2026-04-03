@@ -1,5 +1,6 @@
 import { App } from '@slack/bolt';
 import { isAllowedChannel } from '../middleware/auth';
+import { isAllowedUser } from '../../security/access-control';
 import { AgentBrain } from '../../ai/agent';
 import { RequestTracker } from '../../state/request-tracker';
 import { ComCheckOrchestrator } from '../../orchestrator';
@@ -45,6 +46,16 @@ export function registerMessageHandler(app: App, agent: AgentBrain, tracker: Req
 
     const userId = ('user' in message ? message.user : undefined) || 'unknown';
     const threadTs = ('thread_ts' in message ? message.thread_ts : undefined) || message.ts;
+
+    // User whitelist check
+    if (!isAllowedUser(userId)) {
+      logger.warn(`Unauthorized access attempt: userId=${userId}, text="${message.text}"`);
+      await say({
+        text: "Hey! I don't think I have you on my list yet. You'll need to check with Manny to get set up for comcheck requests.",
+        thread_ts: threadTs,
+      });
+      return;
+    }
 
     // Rate limiting
     if (isRateLimited(userId)) {
@@ -136,7 +147,7 @@ export function registerMessageHandler(app: App, agent: AgentBrain, tracker: Req
         });
 
         // Fire-and-forget: orchestrator processes asynchronously
-        orchestrator.executeComCheck(request.id, input, threadTs)
+        orchestrator.executeComCheck(request.id, input, threadTs, userId)
           .then(async (result) => {
             healthMonitor.recordAutomationResult(true);
             logger.info(`Request ${request.id} completed: ${result.expressCode}`, request.id);

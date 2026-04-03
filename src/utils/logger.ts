@@ -6,7 +6,7 @@ import fs from 'fs';
 const LOG_DIR = path.resolve('./logs');
 fs.mkdirSync(LOG_DIR, { recursive: true });
 
-type Component = 'browser' | 'slack' | 'ai' | 'orchestrator' | 'health' | 'app';
+type Component = 'browser' | 'slack' | 'ai' | 'orchestrator' | 'health' | 'app' | 'security' | 'reporting';
 
 const isDev = process.env.NODE_ENV !== 'production';
 

@@ -239,6 +239,19 @@ export class RequestTracker {
     };
   }
 
+  /** Get completed comchecks within a time window (ISO strings in UTC) */
+  getCompletedInWindow(startUtc: string, endUtc: string): ComcheckRequest[] {
+    return this.db
+      .prepare(
+        `SELECT * FROM comcheck_requests
+         WHERE status = 'completed'
+           AND completed_at >= ?
+           AND completed_at < ?
+         ORDER BY completed_at ASC`
+      )
+      .all(startUtc, endUtc) as ComcheckRequest[];
+  }
+
   /** Find a recently completed comcheck with the same load/reference number */
   findRecentByLoadNumber(referenceNumber: string, withinHours = 24): ComcheckRequest | undefined {
     return this.db

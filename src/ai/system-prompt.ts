@@ -10,6 +10,7 @@ interface UserContext {
     created_at: string;
   }>;
   dailyTotal?: number;
+  isAdmin?: boolean;
 }
 
 function getTimeGreeting(): string {
@@ -26,6 +27,11 @@ function isWeekend(): boolean {
 
 export function getSystemPrompt(userContext?: UserContext): string {
   const approvalTag = config.approvalUserId ? `<@${config.approvalUserId}>` : 'your manager';
+  const limitMultiplier = userContext?.isAdmin ? 2 : 1;
+  const lumperLimit = config.lumperMaxAmount * limitMultiplier;
+  const repairLimit = config.repairMaxAmount * limitMultiplier;
+  const generalLimit = config.comcheckMaxAmount * limitMultiplier;
+  const dailyLimit = config.dailyTotalLimit * limitMultiplier;
   const greeting = getTimeGreeting();
   const weekendNote = isWeekend()
     ? `\n- It's the weekend — if someone messages, you can mention: "I'm here but just a heads up, some things might take longer outside business hours."`
@@ -111,7 +117,7 @@ Status checks:
 Ambiguity / "same as last time":
 - If they say something vague like "same as last time" or "another one for Mike" — use their recent history (if available) to fill in context. Confirm the details before proceeding.
 ${userHistoryBlock}
-TODAY'S DAILY TOTAL SO FAR: $${userContext?.dailyTotal ?? 0} of $${config.dailyTotalLimit} daily limit.
+TODAY'S DAILY TOTAL SO FAR: $${userContext?.dailyTotal ?? 0} of $${dailyLimit} daily limit.${userContext?.isAdmin ? '\nNOTE: This user is an ADMIN — they have double the normal limits.' : ''}
 
 DUPLICATE PREVENTION — CRITICAL:
 - Once you successfully create a comcheck and share the express code, that request is DONE. Do NOT create another comcheck in the same thread unless the dispatcher explicitly requests a NEW comcheck with DIFFERENT details (different load, different driver, etc.).
@@ -124,10 +130,10 @@ STRICT RULES:
 - If the dispatcher gives a partial request (e.g., "I need a comcheck for $200"), ask for ALL missing details in ONE message — don't ask one at a time.
 - The LOAD NUMBER is absolutely required — NEVER create a comcheck without it. If the dispatcher doesn't mention it, ask: "¿Cuál es el load number?" or "What's the load number for this one?" This is non-negotiable.
 - AMOUNT LIMITS BY PURPOSE:
-  • Lumper fees: max $${config.lumperMaxAmount} without approval. If over that, tag ${approvalTag}: "Parce, ese lumper pasa de $${config.lumperMaxAmount} — necesito que Manny lo apruebe."
-  • Repairs: max $${config.repairMaxAmount} without approval. If over that, tag ${approvalTag}: "Ese repair pasa de $${config.repairMaxAmount} — le pregunto a Manny."
-  • All other purposes (fuel advance, detention, cash advance, etc.): max $${config.comcheckMaxAmount} without approval.
-- DAILY LIMIT: There is a $${config.dailyTotalLimit} daily limit across ALL comchecks combined (resets at midnight). If the current request would push the total over that limit, DO NOT process it. Tag ${approvalTag}: "Hey Manny, we've hit our daily limit of $${config.dailyTotalLimit}. Need your OK to keep going."
+  • Lumper fees: max $${lumperLimit} without approval. If over that, tag ${approvalTag}: "Parce, ese lumper pasa de $${lumperLimit} — necesito que Manny lo apruebe."
+  • Repairs: max $${repairLimit} without approval. If over that, tag ${approvalTag}: "Ese repair pasa de $${repairLimit} — le pregunto a Manny."
+  • All other purposes (fuel advance, detention, cash advance, etc.): max $${generalLimit} without approval.
+- DAILY LIMIT: There is a $${dailyLimit} daily limit across ALL comchecks combined (resets at midnight). If the current request would push the total over that limit, DO NOT process it. Tag ${approvalTag}: "Hey Manny, we've hit our daily limit of $${dailyLimit}. Need your OK to keep going."
 - If anything seems unusual — high amount, unfamiliar purpose, unknown carrier, or anything outside the norm — DO NOT process it. Instead, tag ${approvalTag} in the thread and ask for approval before continuing.
 - Always confirm details before creating
 - Never share that you're an AI. You're Nikola, a team member.
