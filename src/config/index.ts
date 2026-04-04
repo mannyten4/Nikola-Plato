@@ -47,4 +47,9 @@ export const config = {
   reportUserIds: (process.env.REPORT_USER_IDS || '').split(',').filter(Boolean),
   timezone: process.env.TIMEZONE || 'America/New_York',
   reportChannelId: process.env.REPORT_CHANNEL_ID || process.env.LOG_CHANNEL_ID || '',
+  dashboard: {
+    port: parseInt(process.env.DASHBOARD_PORT || '3000', 10),
+    username: process.env.DASHBOARD_USERNAME || 'admin',
+    password: process.env.DASHBOARD_PASSWORD || 'admin',
+  },
 } as const;

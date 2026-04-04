@@ -10,6 +10,7 @@ import { ComCheckOrchestrator } from './orchestrator';
 import { HealthMonitor } from './monitoring/health';
 import { scheduleDailyReport } from './monitoring/daily-report';
 import { startReportScheduler, stopReportScheduler } from './reporting/daily-reports';
+import { startDashboard, stopDashboard } from './dashboard/server';
 import { Watchdog } from './process/watchdog';
 import { createLogger } from './utils/logger';
 
@@ -85,6 +86,9 @@ async function main() {
     // Schedule business hours (5 PM) and overnight (9 AM) reports
     startReportScheduler(slackApp.client, requestTracker);
 
+    // Start dashboard web server
+    startDashboard(requestTracker, healthMonitor);
+
     // Health check every 60 seconds
     healthCheckInterval = setInterval(async () => {
       const health = await healthMonitor!.getHealth();
@@ -136,6 +140,7 @@ async function shutdown(exitCode = 0) {
   }
 
   stopReportScheduler();
+  stopDashboard();
 
   // Wait for in-progress comcheck to finish (up to 60 seconds)
   if (orchestrator) {

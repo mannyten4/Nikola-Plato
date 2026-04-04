@@ -72,6 +72,16 @@ export class AgentBrain {
       messages: history,
     });
 
+    // Log token usage
+    if (response.usage && this.tracker) {
+      this.tracker.logTokenUsage(
+        threadId,
+        response.model || 'claude-sonnet-4-20250514',
+        response.usage.input_tokens,
+        response.usage.output_tokens
+      );
+    }
+
     // Extract text and tool use from response
     let text = '';
     let toolCall: AgentResponse['toolCall'] | undefined;

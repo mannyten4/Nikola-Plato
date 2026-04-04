@@ -97,6 +97,38 @@ export class RequestTracker {
       CREATE INDEX IF NOT EXISTS idx_audit_request
       ON audit_log(request_id, timestamp)
     `);
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS token_usage (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        slack_thread_ts TEXT,
+        model_used TEXT NOT NULL,
+        input_tokens INTEGER NOT NULL DEFAULT 0,
+        output_tokens INTEGER NOT NULL DEFAULT 0,
+        total_tokens INTEGER NOT NULL DEFAULT 0,
+        estimated_cost REAL NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_token_usage_date
+      ON token_usage(created_at)
+    `);
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS security_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_type TEXT NOT NULL,
+        user_id TEXT,
+        user_name TEXT,
+        channel_id TEXT,
+        message_text TEXT,
+        details TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_security_events_date
+      ON security_events(created_at)
+    `);
   }
 
   createRequest(threadTs: string, userId: string, userName: string): ComcheckRequest {
@@ -390,9 +422,203 @@ export class RequestTracker {
       .run(requestId, oldStatus, newStatus, triggeredBy, details || null);
   }
 
+  // ── Token usage tracking ──
+
+  logTokenUsage(threadTs: string | null, model: string, inputTokens: number, outputTokens: number): void {
+    const total = inputTokens + outputTokens;
+    // Sonnet pricing: $3/M input, $15/M output
+    const cost = (inputTokens * 3 + outputTokens * 15) / 1_000_000;
+    this.db
+      .prepare(
+        `INSERT INTO token_usage (slack_thread_ts, model_used, input_tokens, output_tokens, total_tokens, estimated_cost)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run(threadTs, model, inputTokens, outputTokens, total, cost);
+  }
+
+  getTokenUsageStats(): { today: TokenPeriod; week: TokenPeriod; month: TokenPeriod } {
+    const query = (since: string) => this.db
+      .prepare(
+        `SELECT COALESCE(SUM(input_tokens), 0) as input_tokens,
+                COALESCE(SUM(output_tokens), 0) as output_tokens,
+                COALESCE(SUM(total_tokens), 0) as total_tokens,
+                COALESCE(SUM(estimated_cost), 0) as estimated_cost,
+                COUNT(*) as request_count
+         FROM token_usage WHERE created_at >= ${since}`
+      )
+      .get() as TokenPeriod;
+
+    return {
+      today: query("date('now')"),
+      week: query("date('now', '-7 days')"),
+      month: query("date('now', '-30 days')"),
+    };
+  }
+
+  getTokenUsageDaily(days = 30): Array<{ date: string; total_tokens: number; estimated_cost: number }> {
+    return this.db
+      .prepare(
+        `SELECT date(created_at) as date,
+                SUM(total_tokens) as total_tokens,
+                SUM(estimated_cost) as estimated_cost
+         FROM token_usage
+         WHERE created_at >= date('now', '-' || ? || ' days')
+         GROUP BY date(created_at)
+         ORDER BY date ASC`
+      )
+      .all(days) as Array<{ date: string; total_tokens: number; estimated_cost: number }>;
+  }
+
+  // ── Security events ──
+
+  logSecurityEvent(eventType: string, userId: string | null, userName: string | null, channelId: string | null, messageText: string | null, details?: string): void {
+    this.db
+      .prepare(
+        `INSERT INTO security_events (event_type, user_id, user_name, channel_id, message_text, details)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run(eventType, userId, userName, channelId, messageText, details || null);
+  }
+
+  getSecurityEvents(limit = 100): SecurityEvent[] {
+    return this.db
+      .prepare(
+        `SELECT * FROM security_events ORDER BY created_at DESC LIMIT ?`
+      )
+      .all(limit) as SecurityEvent[];
+  }
+
+  // ── Dashboard queries ──
+
+  getAllRequests(page = 1, limit = 20, status?: string, from?: string, to?: string): { rows: ComcheckRequest[]; total: number } {
+    let where = 'WHERE 1=1';
+    const params: any[] = [];
+
+    if (status) {
+      where += ' AND status = ?';
+      params.push(status);
+    }
+    if (from) {
+      where += ' AND created_at >= ?';
+      params.push(from);
+    }
+    if (to) {
+      where += ' AND created_at <= ?';
+      params.push(to);
+    }
+
+    const total = (this.db
+      .prepare(`SELECT COUNT(*) as count FROM comcheck_requests ${where}`)
+      .get(...params) as { count: number }).count;
+
+    const offset = (page - 1) * limit;
+    const rows = this.db
+      .prepare(`SELECT * FROM comcheck_requests ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
+      .all(...params, limit, offset) as ComcheckRequest[];
+
+    return { rows, total };
+  }
+
+  getComchecksByDay(days = 30): Array<{ date: string; count: number; total_amount: number }> {
+    return this.db
+      .prepare(
+        `SELECT date(created_at) as date,
+                COUNT(*) as count,
+                COALESCE(SUM(CASE WHEN status = 'completed' THEN amount ELSE 0 END), 0) as total_amount
+         FROM comcheck_requests
+         WHERE created_at >= date('now', '-' || ? || ' days')
+         GROUP BY date(created_at)
+         ORDER BY date ASC`
+      )
+      .all(days) as Array<{ date: string; count: number; total_amount: number }>;
+  }
+
+  getComchecksByDispatcher(): Array<{ dispatcher: string; count: number }> {
+    return this.db
+      .prepare(
+        `SELECT slack_user_name as dispatcher, COUNT(*) as count
+         FROM comcheck_requests
+         WHERE status = 'completed'
+         GROUP BY slack_user_name
+         ORDER BY count DESC`
+      )
+      .all() as Array<{ dispatcher: string; count: number }>;
+  }
+
+  getConversations(limit = 50): ConversationSummary[] {
+    return this.db
+      .prepare(
+        `SELECT
+           c.thread_id,
+           MIN(c.created_at) as first_message_at,
+           MAX(c.created_at) as last_message_at,
+           COUNT(*) as message_count,
+           EXISTS(SELECT 1 FROM comcheck_requests r WHERE r.slack_thread_ts = c.thread_id AND r.status = 'completed') as resulted_in_comcheck
+         FROM conversations c
+         GROUP BY c.thread_id
+         ORDER BY last_message_at DESC
+         LIMIT ?`
+      )
+      .all(limit) as ConversationSummary[];
+  }
+
+  getMonthlyStats(): { total: number; completed: number; failed: number; total_amount: number } {
+    return this.db
+      .prepare(
+        `SELECT
+           COUNT(*) as total,
+           SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+           SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+           COALESCE(SUM(CASE WHEN status = 'completed' THEN amount ELSE 0 END), 0) as total_amount
+         FROM comcheck_requests
+         WHERE created_at >= date('now', '-30 days')`
+      )
+      .get() as { total: number; completed: number; failed: number; total_amount: number };
+  }
+
+  getAllTimeStats(): { total: number; completed: number; failed: number; total_amount: number } {
+    return this.db
+      .prepare(
+        `SELECT
+           COUNT(*) as total,
+           SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+           SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+           COALESCE(SUM(CASE WHEN status = 'completed' THEN amount ELSE 0 END), 0) as total_amount
+         FROM comcheck_requests`
+      )
+      .get() as { total: number; completed: number; failed: number; total_amount: number };
+  }
+
   close(): void {
     this.db.close();
   }
+}
+
+export interface TokenPeriod {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  estimated_cost: number;
+  request_count: number;
+}
+
+export interface SecurityEvent {
+  id: number;
+  event_type: string;
+  user_id: string | null;
+  user_name: string | null;
+  channel_id: string | null;
+  message_text: string | null;
+  details: string | null;
+  created_at: string;
+}
+
+export interface ConversationSummary {
+  thread_id: string;
+  first_message_at: string;
+  last_message_at: string;
+  message_count: number;
+  resulted_in_comcheck: number;
 }
 
 export interface AuditEntry {

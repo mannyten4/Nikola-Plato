@@ -50,6 +50,7 @@ export function registerMessageHandler(app: App, agent: AgentBrain, tracker: Req
     // User whitelist check
     if (!isAllowedUser(userId)) {
       logger.warn(`Unauthorized access attempt: userId=${userId}, text="${message.text}"`);
+      tracker.logSecurityEvent('unauthorized_user', userId, null, message.channel, message.text);
       await say({
         text: "Hey! I don't think I have you on my list yet. You'll need to check with Manny to get set up for comcheck requests.",
         thread_ts: threadTs,
