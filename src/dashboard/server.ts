@@ -50,7 +50,7 @@ export function startDashboard(tracker: RequestTracker, healthMonitor: HealthMon
   app.use('/api', createApiRoutes(tracker, healthMonitor));
 
   // SPA fallback
-  app.get('*', (_req, res) => {
+  app.get('/{*path}', (_req, res) => {
     res.sendFile(path.join(staticDir, 'index.html'));
   });
 

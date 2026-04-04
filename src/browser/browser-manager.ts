@@ -38,14 +38,23 @@ export class BrowserManager {
     fs.mkdirSync(this.config.userDataDir, { recursive: true });
     fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 
+    // When headless is true, use --headless=new flag instead of Playwright's headless mode
+    // to avoid the headless shell variant which has path issues in Docker
+    const launchArgs = [
+      '--disable-blink-features=AutomationControlled',
+    ];
+    
+    if (this.config.headless) {
+      launchArgs.push('--headless=new');
+    }
+
     this.context = await chromium.launchPersistentContext(this.config.userDataDir, {
-      headless: this.config.headless,
+      headless: false,  // Always false, use --headless=new flag instead
       slowMo: this.config.slowMo,
       userAgent: USER_AGENT,
       viewport: { width: 1920, height: 1080 },
-      args: [
-        '--disable-blink-features=AutomationControlled',
-      ],
+      executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined,
+      args: launchArgs,
     });
 
     this.context.on('close', () => {
